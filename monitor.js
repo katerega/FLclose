@@ -1,41 +1,69 @@
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const Web3 = require('web3');
+const web3 = new Web3('https://bsc-dataseed.binance.org/'); // Replace with your RPC endpoint
 
-describe("ArbitrageBot", function () {
-    let arbitrageBot;
-    let owner;
-    let token1;
-    let token2;
+// Contract details
+const CONTRACT_ADDRESS = "0x8BEf278614FB8CE3414564dAE1FAF416A159935C";
+const ABI = fl.abi // Load the contract ABI
+const contract = new web3.eth.Contract(ABI, CONTRACT_ADDRESS);
+const OWNER_ADDRESS = "your_owner_address_here";
 
-    beforeEach(async function () {
-        [owner] = await ethers.getSigners();
+// Security monitoring
+async function checkReentrancy() {
+    const logs = await web3.eth.getPastLogs({ address: CONTRACT_ADDRESS });
+    for (const log of logs) {
+        if (log.data.includes("call")) { // Example pattern
+            console.log("Potential reentrancy detected!");
+            executePatch("reentrancy");
+        }
+    }
+}
 
-        const ArbitrageBot = await ethers.getContractFactory("ArbitrageBot");
-        // Replace with real DEX router addresses
-        const dex1Router = '0xYourDex1RouterAddress';
-        const dex2Router = '0xYourDex2RouterAddress';
-        arbitrageBot = await ArbitrageBot.deploy(dex1Router, dex2Router);
-        await arbitrageBot.deployed();
+async function checkFlashloanAttack() {
+    const balanceBefore = await web3.eth.getBalance(CONTRACT_ADDRESS);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const balanceAfter = await web3.eth.getBalance(CONTRACT_ADDRESS);
+    if (balanceAfter - balanceBefore > web3.utils.toWei('10', 'ether')) {
+        console.log("Flash loan attack detected!");
+        executePatch("flashloan");
+    }
+}
 
-        // Mock ERC20 tokens for testing
-        const ERC20 = await ethers.getContractFactory("ERC20Token");
-        token1 = await ERC20.deploy("Token1", "TK1", ethers.utils.parseEther("1000"));
-        token2 = await ERC20.deploy("Token2", "TK2", ethers.utils.parseEther("1000"));
-        await token1.deployed();
-        await token2.deployed();
-    });
+async function checkLargeCashout() {
+    const latestBlock = await web3.eth.getBlock('latest', true);
+    for (const tx of latestBlock.transactions) {
+        if (tx.to === OWNER_ADDRESS && tx.value > web3.utils.toWei('5', 'ether')) {
+            console.log("Large cashout detected!");
+            executePatch("large_cashout");
+        }
+    }
+}
 
-    it("Should execute arbitrage successfully", async function () {
-        const amount = ethers.utils.parseEther("10");
+async function executePatch(issue) {
+    console.log(`Applying patch for ${issue}...`);
+    if (issue === "reentrancy") {
+        console.log("Locking contract to prevent reentrancy.");
+        patchContract("reentrancy");
+    } else if (issue === "flashloan") {
+        console.log("Temporarily disabling high-value swaps.");
+        patchContract("flashloan");
+    } else if (issue === "large_cashout") {
+        console.log("Enforcing withdrawal limit.");
+        patchContract("large_cashout");
+    }
+}
 
-        // Approve the contract to spend tokens
-        await token1.connect(owner).approve(arbitrageBot.address, amount);
+async function patchContract(issueType) {
+    console.log(`Executing smart contract patch for ${issueType}...`);
+    const tx = await contract.methods.applyPatch(issueType).send({ from: OWNER_ADDRESS });
+    console.log(`Patch for ${issueType} applied successfully! Transaction Hash: ${tx.transactionHash}`);
+}
 
-        // Execute arbitrage (mocked swap)
-        await arbitrageBot.connect(owner).executeArbitrage(token1.address, token2.address, amount);
-
-        // Check the final balance of tokens
-        const token1Balance = await token1.balanceOf(arbitrageBot.address);
-        expect(token1Balance).to.be.gt(0);
-    });
-});
+// Main monitoring loop
+(async function monitor() {
+    while (true) {
+        await checkReentrancy();
+        await checkFlashloanAttack();
+        await checkLargeCashout();
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Adjust frequency as needed
+    }
+})();

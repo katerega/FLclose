@@ -3,7 +3,7 @@ const web3 = new Web3('https://bsc-dataseed.binance.org/'); // Replace with your
 
 // Contract details
 const CONTRACT_ADDRESS = "0x8BEf278614FB8CE3414564dAE1FAF416A159935C";
-const ABI = fl.abi // Load the contract ABI
+const ABI = arbFL.abi // Load the contract ABI
 const contract = new web3.eth.Contract(ABI, CONTRACT_ADDRESS);
 const OWNER_ADDRESS = "your_owner_address_here";
 
